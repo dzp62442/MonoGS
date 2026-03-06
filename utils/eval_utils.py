@@ -3,6 +3,7 @@ import os
 
 import cv2
 import evo
+import matplotlib as mpl
 import numpy as np
 import torch
 from evo.core import metrics, trajectory
@@ -11,7 +12,7 @@ from evo.core.trajectory import PosePath3D, PoseTrajectory3D
 from evo.tools import plot
 from evo.tools.plot import PlotMode
 from evo.tools.settings import SETTINGS
-from matplotlib import pyplot as plt
+from matplotlib import cm, pyplot as plt
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 
 import wandb
@@ -20,6 +21,26 @@ from gaussian_splatting.utils.image_utils import psnr
 from gaussian_splatting.utils.loss_utils import ssim
 from gaussian_splatting.utils.system_utils import mkdir_p
 from utils.logging_utils import Log
+
+
+def _traj_colormap_compat(ax, traj, array, plot_mode, min_map, max_map):
+    pos = traj.positions_xyz
+    norm = mpl.colors.Normalize(vmin=min_map, vmax=max_map, clip=True)
+    mapper = cm.ScalarMappable(norm=norm, cmap=SETTINGS.plot_trajectory_cmap)
+    mapper.set_array(array)
+    colors = [mapper.to_rgba(value) for value in array]
+    line_collection = plot.colored_line_collection(pos, colors, plot_mode)
+    ax.add_collection(line_collection)
+    ax.autoscale_view(True, True, True)
+
+    if plot_mode == PlotMode.xyz:
+        ax.set_zlim(np.amin(pos[:, 2]), np.amax(pos[:, 2]))
+        if SETTINGS.plot_xyz_realistic:
+            plot.set_aspect_equal_3d(ax)
+
+    ticks = [min_map, max_map - (max_map - min_map) / 2, max_map]
+    cbar = ax.figure.colorbar(mapper, ax=ax, ticks=ticks)
+    cbar.ax.set_yticklabels([f"{tick:0.3f}" for tick in ticks])
 
 
 def evaluate_evo(poses_gt, poses_est, plot_dir, label, monocular=False):
@@ -51,7 +72,7 @@ def evaluate_evo(poses_gt, poses_est, plot_dir, label, monocular=False):
     ax = evo.tools.plot.prepare_axis(fig, plot_mode)
     ax.set_title(f"ATE RMSE: {ape_stat}")
     evo.tools.plot.traj(ax, plot_mode, traj_ref, "--", "gray", "gt")
-    evo.tools.plot.traj_colormap(
+    _traj_colormap_compat(
         ax,
         traj_est_aligned,
         ape_metric.error,
@@ -61,6 +82,7 @@ def evaluate_evo(poses_gt, poses_est, plot_dir, label, monocular=False):
     )
     ax.legend()
     plt.savefig(os.path.join(plot_dir, "evo_2dplot_{}.png".format(str(label))), dpi=90)
+    plt.close(fig)
 
     return ape_stat
 

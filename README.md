@@ -40,37 +40,48 @@ The method demonstrates the first monocular SLAM solely based on 3D Gaussian Spl
 <br>
 
 # Note
+
 - In an academic paper, please refer to our work as **Gaussian Splatting SLAM** or **MonoGS** for short (this repo's name) to avoid confusion with other works.
 - Differential Gaussian Rasteriser with camera pose gradient computation is available [here](https://github.com/rmurai0610/diff-gaussian-rasterization-w-pose.git).
 - **[New]** Speed-up version of our code is available in `dev.speedup` branch, It achieves up to 10fps on monocular fr3/office sequence while keeping consistent performance (tested on RTX4090/i9-12900K). The code will be merged into the main branch after further refactoring and testing.
 
 # Getting Started
+
 ## Installation
-```
-git clone https://github.com/muskie82/MonoGS.git --recursive
+
+```bash
+git clone https://github.com/muskie82/MonoGS.git
 cd MonoGS
+git submodule update --init --recursive
 ```
+
 Setup the environment.
 
-```
-conda env create -f environment.yml
+```bash
+conda create -n MonoGS python=3.10 pip=22.3.1 -y
 conda activate MonoGS
+pip install numpy==1.26.4 torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu118
+pip install -r requirements.txt
 ```
-Depending on your setup, please change the dependency version of pytorch/cudatoolkit in `environment.yml` by following [this document](https://pytorch.org/get-started/previous-versions/).
 
-Our test setup were:
+The command above targets a CUDA 11.8 environment. If your setup uses a different CUDA version, please replace the PyTorch install command by following the official [PyTorch installation guide](https://pytorch.org/get-started/locally/).
+
+The original release was tested with the following setups:
 - Ubuntu 20.04: `pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cudatoolkit=11.6`
 - Ubuntu 18.04: `pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cudatoolkit=11.3`
 
 ## Quick Demo
-```
+
+```bash
 bash scripts/download_tum.sh
 python slam.py --config configs/mono/tum/fr3_office.yaml
 ```
 You will see a GUI window pops up.
 
 ## Downloading Datasets
+
 Running the following scripts will automatically download datasets to the `./datasets` folder.
+
 ### TUM-RGBD dataset
 ```bash
 bash scripts/download_tum.sh
@@ -168,7 +179,6 @@ If you found this code/work to be useful in your own research, please considerin
 }
 
 ```
-
 
 
 
