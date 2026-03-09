@@ -124,3 +124,7 @@
 - 不要提交数据集、模型权重、`results/` 产物、代理配置或宿主机私有路径。
 - 若需要代理，仅在当前 shell / 当前构建会话中临时设置，不要把代理地址写死进仓库文件。
 - 新增配置时优先基于现有 `base_config.yaml` 继承，避免复制整份配置造成漂移。
+
+## References
+- 论文原文：通过 zotero-mcp 和 pdf 技能访问 Gaussian Splatting SLAM 论文。
+- 文献解读：知识库（`~/000/Brain/`）中路径：`2-Areas/0-文献精读/SLAM/MonoGS_文献解读.md`，文献解读仅供参考，以原文为准
