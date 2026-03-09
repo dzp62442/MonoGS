@@ -1,0 +1,43 @@
+x-monogs-base: &monogs-base
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: monogs:cu118
+  init: true
+  stdin_open: true
+  tty: true
+  working_dir: /workspace/MonoGS
+  shm_size: "8gb"
+  gpus: all
+  user: ${MONOGS_UID:-1000}:${MONOGS_GID:-1000}
+  environment:
+    HOME: /tmp/monogs-home
+    MONOGS_ENV_NAME: monogs
+    PYTHONUNBUFFERED: "1"
+    QT_X11_NO_MITSHM: "1"
+  volumes:
+    - .:/workspace/MonoGS
+    - ${MONOGS_DATASETS_DIR:-./datasets}:/workspace/MonoGS/datasets
+    - ${MONOGS_RESULTS_DIR:-./results}:/workspace/MonoGS/results
+
+services:
+  monogs:
+    <<: *monogs-base
+    container_name: monogs-headless
+    command: bash
+
+  monogs-gui:
+    <<: *monogs-base
+    container_name: monogs-gui
+    environment:
+      HOME: /tmp/monogs-home
+      MONOGS_ENV_NAME: monogs
+      PYTHONUNBUFFERED: "1"
+      QT_X11_NO_MITSHM: "1"
+      DISPLAY: ${DISPLAY:-:0}
+    volumes:
+      - .:/workspace/MonoGS
+      - ${MONOGS_DATASETS_DIR:-./datasets}:/workspace/MonoGS/datasets
+      - ${MONOGS_RESULTS_DIR:-./results}:/workspace/MonoGS/results
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    command: bash
