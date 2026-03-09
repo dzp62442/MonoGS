@@ -2,17 +2,13 @@ import json
 import os
 
 import cv2
-import evo
 import matplotlib as mpl
 import numpy as np
 import torch
 from evo.core import metrics, trajectory
 from evo.core.metrics import PoseRelation, Unit
 from evo.core.trajectory import PosePath3D, PoseTrajectory3D
-from evo.tools import plot
-from evo.tools.plot import PlotMode
 from evo.tools.settings import SETTINGS
-from matplotlib import cm, pyplot as plt
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 
 import wandb
@@ -21,6 +17,29 @@ from gaussian_splatting.utils.image_utils import psnr
 from gaussian_splatting.utils.loss_utils import ssim
 from gaussian_splatting.utils.system_utils import mkdir_p
 from utils.logging_utils import Log
+
+
+def _configure_headless_plot_backend():
+    forced_backend = os.environ.get("MONOGS_EVO_PLOT_BACKEND")
+    if forced_backend:
+        backend = forced_backend
+    elif os.environ.get("DISPLAY"):
+        return
+    else:
+        backend = "Agg"
+
+    # evo.tools.plot calls mpl.use(SETTINGS.plot_backend) at import time, so
+    # we must update SETTINGS before importing evo.tools.plot / pyplot.
+    SETTINGS.plot_backend = backend
+    os.environ.setdefault("MPLBACKEND", backend)
+    mpl.use(backend, force=True)
+
+
+_configure_headless_plot_backend()
+
+from evo.tools import plot
+from evo.tools.plot import PlotMode
+from matplotlib import cm, pyplot as plt
 
 
 def _traj_colormap_compat(ax, traj, array, plot_mode, min_map, max_map):
@@ -58,7 +77,7 @@ def evaluate_evo(poses_gt, poses_est, plot_dir, label, monocular=False):
     ape_metric.process_data(data)
     ape_stat = ape_metric.get_statistic(metrics.StatisticsType.rmse)
     ape_stats = ape_metric.get_all_statistics()
-    Log("RMSE ATE \[m]", ape_stat, tag="Eval")
+    Log("RMSE ATE [m]", ape_stat, tag="Eval")
 
     with open(
         os.path.join(plot_dir, "stats_{}.json".format(str(label))),
@@ -67,11 +86,11 @@ def evaluate_evo(poses_gt, poses_est, plot_dir, label, monocular=False):
     ) as f:
         json.dump(ape_stats, f, indent=4)
 
-    plot_mode = evo.tools.plot.PlotMode.xy
+    plot_mode = PlotMode.xy
     fig = plt.figure()
-    ax = evo.tools.plot.prepare_axis(fig, plot_mode)
+    ax = plot.prepare_axis(fig, plot_mode)
     ax.set_title(f"ATE RMSE: {ape_stat}")
-    evo.tools.plot.traj(ax, plot_mode, traj_ref, "--", "gray", "gt")
+    plot.traj(ax, plot_mode, traj_ref, "--", "gray", "gt")
     _traj_colormap_compat(
         ax,
         traj_est_aligned,

@@ -4,6 +4,7 @@
 - 默认把本仓库视为 **MonoGS（Gaussian Splatting SLAM）主仓库**，主入口是 `slam.py`。
 - 优先使用 **中文** 沟通、注释和补充文档。
 - 如无特殊说明，优先使用 **TMUX + Docker + NVIDIA Container Toolkit** 运行实验；宿主机直接运行仅作为对照或应急方案。
+- 如果任务涉及 **Docker 自动化实验、容器构建、tmux 长任务、subagent 周期监控、运行时环境注入或清理残留进程**，优先调用技能 `$codex-docker-exp`；本文件只补充 MonoGS 特有约束。
 - 当前仓库已经提供 Docker 相关文件：`Dockerfile`、`docker-compose.yml`、`docker/entrypoint.sh`、`docs/Docker_运行指南.md`。
 - 当前仓库没有独立 `tests/` 目录；改动后至少做一次最小冒烟验证。
 
@@ -17,21 +18,20 @@
 
 ## Preferred Runtime: Docker
 
-### Host prerequisites
-- 宿主机应已安装并验证：
+### MonoGS-specific runtime notes
+- 通用 Docker / tmux / subagent / 清理纪律见 `$codex-docker-exp`；这里仅保留本仓库特有信息。
+- 本项目默认假设宿主机已经装好并验证：
   - `docker`
   - `docker compose`
   - `nvidia-container-toolkit`
-- 宿主机应满足以下验证：
-  - `docker run --rm hello-world`
-  - `docker run --rm --gpus all nvidia/cuda:11.8.0-runtime-ubuntu22.04 nvidia-smi`
-- 如果当前 shell 里 `docker` 仍提示 `permission denied while trying to connect to the docker API`，通常是 `docker` 用户组尚未在当前 shell 生效；优先尝试 `newgrp docker` 或重新登录 shell / tmux 会话。
+- 如果新开的 shell / `tmux` 会话里 `docker` 仍报 `permission denied while trying to connect to the docker API`，先处理当前会话权限，通常直接 `newgrp docker` 即可；不要先怀疑本仓库 Docker 配置。
 
 ### Repo Docker files
 - `Dockerfile`：基于 `nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04` 构建镜像，镜像名通过 Compose 生成为 `monogs:cu118`。
 - `docker-compose.yml`：
   - `monogs`：无头运行 / 评估 / 调试
   - `monogs-gui`：X11 GUI 运行
+- `docker/compose-entrypoint.sh`：Compose 运行时 wrapper，优先用于加载宿主机实验环境变量，再转交给镜像内入口。
 - `docker/entrypoint.sh`：容器启动时自动激活 `conda` 环境并切到 `/workspace/MonoGS`。
 - `Dockerfile` 已在靠后层固化 `xvfb` / `xauth`，用于在容器内跑带 GUI 逻辑的 Quick Demo，而不依赖宿主机 X11 透传。
 - 详细说明见 `docs/Docker_运行指南.md`。
@@ -52,18 +52,27 @@
 - GUI 模式（宿主机 X11 透传，仅在需要真实窗口交互时使用，疑似不可用）：
   - `docker compose run --rm -e DISPLAY=$DISPLAY monogs-gui python slam.py --config configs/mono/tum/fr3_office.yaml`
 
+### MonoGS evaluation quirks
+- 当前 Compose 工作流已固定挂载 `/home/dzp62442/.wandb_cfg`，并通过 `docker/compose-entrypoint.sh` 自动加载；后续正常使用 `docker compose run ...` 时，不应再手工 `source ~/.wandb_cfg`。
+- `slam.py --eval` 不只是“关 GUI 做评估”。它会覆盖：
+  - `save_results=True`
+  - `use_gui=False`
+  - `eval_rendering=True`
+  - `use_wandb=True`
+- 因此，若容器里拿不到 `WANDB_API_KEY`，evaluation 会在初始化阶段直接退出，而不是进入 SLAM 主流程后再失败。
+- 当前已验证：`wandb` 自动加载打通后，evaluation 能正常创建 run 并进入 `MonoGS: Initialized SLAM`。
+- 但 headless evaluation 仍会在中途调用 `eval_ate()` 生成 ATE 图；如果 `evo` / `matplotlib` 的 backend 还是 `TkAgg`，会在第一次中途 ATE 时因 `Cannot load backend 'TkAgg' ... as 'headless' is currently running` 中断整个评估。
+- 上游 `muskie82/MonoGS` 的 issue `#38` 给出的 workaround 是 `evo_config set plot_backend agg`；当前仓库已把这件事下沉到 Python 侧的 `utils/eval_utils.py`，在 headless 场景自动切到 `Agg`，因此 Docker 内外共用同一套修复路径。
+- 若确实需要手工覆盖 plotting backend，再显式设置环境变量：
+  - `MONOGS_EVO_PLOT_BACKEND=Agg`
+- 评估中途若看到 `RMSE ATE` 已输出，不代表整次 evaluation 已完成。只有主流程继续跑完最终 ATE、rendering metrics、颜色优化、结果保存和 backend 正常退出，才算完整结束。
+
 ### Docker implementation notes
-- `Dockerfile` 已刻意把以下步骤拆层，以保护缓存、减少重下大包：
-  - conda 环境创建
-  - `pip` / 构建工具
-  - `PyTorch cu118`
-  - 普通 Python 依赖
-  - 本地 CUDA 子模块编译
-- 后续若需修 Docker 构建问题，**尽量不要修改 `PyTorch` 安装之前的层**，否则会导致 `torch==2.0.1+cu118` 重新下载。
+- 通用容器构建纪律、缓存层策略、Compose 与 Dockerfile 的分工见 `$codex-docker-exp`；这里仅保留 MonoGS 特有构建约束。
+- 当前 `Dockerfile` 已刻意把 conda、PyTorch cu118、普通 Python 依赖、本地 CUDA 子模块编译拆层；后续若需修 Docker 构建问题，**尽量不要修改 `PyTorch` 安装之前的层**，否则会导致 `torch==2.0.1+cu118` 重新下载。
 - 本地 CUDA 子模块当前在 Docker 内通过 `python setup.py install` 安装，而不是直接 `pip install -r requirements.txt` 完成，原因是：
   - `simple-knn` / `diff-gaussian-rasterization` 的 `setup.py` 直接依赖已安装的 `torch`
   - 新版 `pip` / `PEP 517` 隔离构建容易导致构建期看不到 `torch`
-- 若 Docker Hub 拉取元数据超时，可优先重试；若持续缓慢，再考虑为 Docker daemon 或当前 shell 单独配置代理。
 - 当前验证经验：本项目“纯无 GUI”路径未必总是最稳；首次验证环境时，优先用 `xvfb-run` 走 `slam.py` 官方入口，不要先写自定义 Python 包装脚本绕过主入口。
 
 ## Build, Test, and Development Commands
@@ -95,6 +104,10 @@
   1. `python slam.py --help`
   2. 对应配置的 `--eval` 无头冒烟
   3. 必要时再跑 GUI 或更长序列
+- 若要验证 evaluation 链路，不要只验证命令是否启动；至少确认：
+  - `wandb` 已成功登录或加载 API key
+  - 日志已进入 `MonoGS: Initialized SLAM`
+  - 中途 `Evaluating ATE at frame: ...` 不会因 `TkAgg` / headless 报错中断
 - 涉及配置或数据加载改动时，优先验证对应数据集入口。
 - 涉及格式或 Python 语法改动时，运行 `ruff check .`。
 - 若改动 Docker 相关文件，至少验证：

@@ -6,6 +6,7 @@ x-monogs-base: &monogs-base
   init: true
   stdin_open: true
   tty: true
+  entrypoint: ["/workspace/MonoGS/docker/compose-entrypoint.sh"]
   working_dir: /workspace/MonoGS
   shm_size: "8gb"
   gpus: all
@@ -13,12 +14,17 @@ x-monogs-base: &monogs-base
   environment:
     HOME: /tmp/monogs-home
     MONOGS_ENV_NAME: monogs
+    MONOGS_WANDB_CFG: /run/monogs/wandb_cfg
     PYTHONUNBUFFERED: "1"
     QT_X11_NO_MITSHM: "1"
+    WANDB_ENTITY: ${WANDB_ENTITY:-}
+    WANDB_BASE_URL: ${WANDB_BASE_URL:-}
+    WANDB_API_KEY: ${WANDB_API_KEY:-}
   volumes:
     - .:/workspace/MonoGS
     - ${MONOGS_DATASETS_DIR:-./datasets}:/workspace/MonoGS/datasets
     - ${MONOGS_RESULTS_DIR:-./results}:/workspace/MonoGS/results
+    - /home/dzp62442/.wandb_cfg:/run/monogs/wandb_cfg:ro
 
 services:
   monogs:
@@ -32,9 +38,13 @@ services:
     environment:
       HOME: /tmp/monogs-home
       MONOGS_ENV_NAME: monogs
+      MONOGS_WANDB_CFG: /run/monogs/wandb_cfg
       PYTHONUNBUFFERED: "1"
       QT_X11_NO_MITSHM: "1"
       DISPLAY: ${DISPLAY:-:0}
+      WANDB_ENTITY: ${WANDB_ENTITY:-}
+      WANDB_BASE_URL: ${WANDB_BASE_URL:-}
+      WANDB_API_KEY: ${WANDB_API_KEY:-}
     volumes:
       - .:/workspace/MonoGS
       - ${MONOGS_DATASETS_DIR:-./datasets}:/workspace/MonoGS/datasets
